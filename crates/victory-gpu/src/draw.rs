@@ -188,6 +188,9 @@ fn windows() -> bool {
 #[derive(Default)]
 pub(crate) struct State {
     pipeline: usize,
+    /// The thread count in x of the dispatch being run when given in threads
+    /// (`USER_THREAD_LIMIT`); `None`: no limit.
+    thread_limit: Option<u32>,
     /// View heap, sampler heap.
     heaps: [usize; 2],
     graphics: Vec<Root>,
@@ -753,7 +756,10 @@ impl State {
         dword: u32,
         memory: Option<&crate::memory::Ready>,
     ) -> u32 {
-        use victory_shader::emit::{USER_MEMORY_BASE, USER_VIEW_ADDRESS, USER_VIEW_BIAS};
+        use victory_shader::emit::{USER_MEMORY_BASE, USER_THREAD_LIMIT, USER_VIEW_ADDRESS, USER_VIEW_BIAS};
+        if kind == USER_THREAD_LIMIT {
+            return self.thread_limit.unwrap_or(u32::MAX);
+        }
         if kind == USER_MEMORY_BASE {
             return memory.map_or(0, |m| m.base);
         }
@@ -1971,6 +1977,17 @@ impl State {
             }
             text
         });
+    }
+
+    /// The thread count in x of the dispatch being run, for a dispatch given in threads
+    /// (`USER_THREAD_LIMIT`); all ones otherwise.
+    pub(crate) fn set_thread_limit(&mut self, limit: Option<u32>) {
+        self.thread_limit = limit;
+    }
+
+    /// The title pipeline bound now.
+    pub(crate) fn pipeline_handle(&self) -> This {
+        self.pipeline as This
     }
 
     /// Runs a dispatch on the host.
