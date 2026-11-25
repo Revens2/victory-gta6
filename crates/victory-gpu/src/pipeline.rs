@@ -263,6 +263,13 @@ pub(crate) fn builder_quarantined(this: This) -> bool {
     is_builder(this) && *ON.get_or_init(|| std::env::var_os("VICTORY_BVH_QUARANTINE").is_some_and(|v| v == "1"))
 }
 
+/// The groups that hold `threads` threads in x, y, z at a group size of `size`
+/// (`DispatchX` with `USE_THREAD_DIMENSIONS`: its x, y, z count threads); the last
+/// group may be partial. A group size of 0 counts as 1.
+pub(crate) fn thread_groups(threads: [u32; 3], size: [u32; 3]) -> [u32; 3] {
+    std::array::from_fn(|i| threads[i].div_ceil(size[i].max(1)))
+}
+
 /// The thread-group size of the compute pipeline `this` (its translated program's), for a
 /// dispatch given in threads (`DispatchX` with `USE_THREAD_DIMENSIONS`).
 #[cfg(windows)]
@@ -748,6 +755,20 @@ pub fn save_pipeline_cache() {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn thread_dimensions_round_up_to_whole_groups() {
+        // The rehydration stage: x threads of a 64-wide group, not x groups.
+        assert_eq!(super::thread_groups([1, 1, 1], [64, 1, 1]), [1, 1, 1]);
+        assert_eq!(super::thread_groups([64, 1, 1], [64, 1, 1]), [1, 1, 1]);
+        assert_eq!(super::thread_groups([65, 1, 1], [64, 1, 1]), [2, 1, 1]);
+        assert_eq!(super::thread_groups([23_360, 1, 1], [64, 1, 1]), [365, 1, 1]);
+        assert_eq!(super::thread_groups([100, 9, 3], [8, 8, 2]), [13, 2, 2]);
+        // No group size known: counts stay as they were.
+        assert_eq!(super::thread_groups([7, 1, 1], [0, 0, 0]), [7, 1, 1]);
+        // Zero threads run nothing.
+        assert_eq!(super::thread_groups([0, 1, 1], [64, 1, 1]), [0, 1, 1]);
+    }
+
     #[cfg(all(windows, feature = "diagnostics"))]
     #[test]
     fn skip_hashes_accepts_full_hashes_only() {

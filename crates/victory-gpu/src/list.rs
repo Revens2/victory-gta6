@@ -1598,11 +1598,12 @@ mod state {
     pub(super) fn dispatch_threads(this: This, x: u32, y: u32, z: u32) {
         super::count_dispatch();
         with_state(this, |list, s| {
-            let [tx, ty, tz] = crate::pipeline::compute_threads(s.pipeline_handle()).unwrap_or([1, 1, 1]);
+            let size = crate::pipeline::compute_threads(s.pipeline_handle()).unwrap_or([1, 1, 1]);
+            let [gx, gy, gz] = crate::pipeline::thread_groups([x, y, z], size);
             // The lanes past `x` leave at once (`USER_THREAD_LIMIT`), as on the console.
             // shortcut: in y and z only whole groups (the builder dispatches 1 there).
             s.set_thread_limit(Some(x));
-            s.dispatch(list, x.div_ceil(tx.max(1)), y.div_ceil(ty.max(1)), z.div_ceil(tz.max(1)));
+            s.dispatch(list, gx, gy, gz);
             s.set_thread_limit(None);
         });
     }
